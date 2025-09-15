@@ -50,6 +50,11 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
+    /* Custom gradients for heat map */
+    --gradient-heat-high: radial-gradient(circle, hsl(var(--destructive) / 0.6) 0%, hsl(var(--destructive) / 0.3) 50%, transparent 100%);
+    --gradient-heat-medium: radial-gradient(circle, hsl(var(--warning) / 0.5) 0%, hsl(var(--warning) / 0.25) 50%, transparent 100%);
+    --gradient-heat-low: radial-gradient(circle, hsl(48 96% 53% / 0.4) 0%, hsl(48 96% 53% / 0.2) 50%, transparent 100%);
+
     --sidebar-background: 0 0% 98%;
 
     --sidebar-foreground: 240 5.3% 26.1%;

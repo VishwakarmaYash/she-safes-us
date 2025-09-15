@@ -1,6 +1,7 @@
 import EmergencyButton from "@/components/EmergencyButton";
 import SafeLocations from "@/components/SafeLocations";
 import EmergencyContacts from "@/components/EmergencyContacts";
+import CrimeHeatMap from "@/components/CrimeHeatMap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Clock, Thermometer, Wifi } from "lucide-react";
@@ -52,49 +53,55 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Safe Locations */}
+      {/* Crime Heat Map and Safe Locations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SafeLocations />
+        {/* Crime Heat Map */}
+        <CrimeHeatMap />
         
-        {/* Quick Stats Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Safety Statistics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-safe/10 rounded-lg border border-safe/20">
-                <div className="text-2xl font-bold text-safe">127</div>
-                <div className="text-xs text-muted-foreground">Safe Locations Nearby</div>
+        <div className="space-y-6">
+          {/* Safe Locations */}
+          <SafeLocations />
+          
+          {/* Quick Stats Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Safety Statistics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-safe/10 rounded-lg border border-safe/20">
+                  <div className="text-2xl font-bold text-safe">127</div>
+                  <div className="text-xs text-muted-foreground">Safe Locations Nearby</div>
+                </div>
+                <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                  <div className="text-2xl font-bold text-primary">24/7</div>
+                  <div className="text-xs text-muted-foreground">Emergency Support</div>
+                </div>
+                <div className="text-center p-3 bg-accent/20 rounded-lg border border-accent/30">
+                  <div className="text-2xl font-bold text-foreground">3</div>
+                  <div className="text-xs text-muted-foreground">Emergency Contacts</div>
+                </div>
+                <div className="text-center p-3 bg-secondary/50 rounded-lg border border-secondary">
+                  <div className="text-2xl font-bold text-foreground">Safe</div>
+                  <div className="text-xs text-muted-foreground">Current Status</div>
+                </div>
               </div>
-              <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
-                <div className="text-2xl font-bold text-primary">24/7</div>
-                <div className="text-xs text-muted-foreground">Emergency Support</div>
+              
+              <div className="pt-4 border-t">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Last Location Update</span>
+                  <span className="font-medium">2 minutes ago</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-muted-foreground">GPS Accuracy</span>
+                  <Badge variant="secondary" className="bg-safe/10 text-safe border-safe/20">
+                    High (±3m)
+                  </Badge>
+                </div>
               </div>
-              <div className="text-center p-3 bg-accent/20 rounded-lg border border-accent/30">
-                <div className="text-2xl font-bold text-foreground">3</div>
-                <div className="text-xs text-muted-foreground">Emergency Contacts</div>
-              </div>
-              <div className="text-center p-3 bg-secondary/50 rounded-lg border border-secondary">
-                <div className="text-2xl font-bold text-foreground">Safe</div>
-                <div className="text-xs text-muted-foreground">Current Status</div>
-              </div>
-            </div>
-            
-            <div className="pt-4 border-t">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Last Location Update</span>
-                <span className="font-medium">2 minutes ago</span>
-              </div>
-              <div className="flex items-center justify-between text-sm mt-2">
-                <span className="text-muted-foreground">GPS Accuracy</span>
-                <Badge variant="secondary" className="bg-safe/10 text-safe border-safe/20">
-                  High (±3m)
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Bottom Spacing */}
