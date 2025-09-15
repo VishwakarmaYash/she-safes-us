@@ -14,6 +14,7 @@ import {
   Maximize2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
 interface CrimeZone {
   id: number;
@@ -34,6 +35,7 @@ interface SafeZone {
 
 const CrimeHeatMap = () => {
   const { toast } = useToast();
+  const { location, isLoading: locationLoading, error: locationError } = useGeolocation();
   const [showHeatMap, setShowHeatMap] = useState(true);
   const [showSafeZones, setShowSafeZones] = useState(true);
 
@@ -53,7 +55,12 @@ const CrimeHeatMap = () => {
     { id: 4, x: 20, y: 50, name: 'Metro Police', type: 'police' },
   ];
 
-  const currentLocation = { x: 45, y: 45 };
+  const currentLocation = location 
+    ? { 
+        x: 45 + (location.longitude - (-74.006)) * 1000, // Approximate conversion for demo
+        y: 45 + (40.7128 - location.latitude) * 1000 
+      }
+    : { x: 45, y: 45 }; // Fallback position
 
   const getHeatColor = (intensity: string) => {
     switch (intensity) {
@@ -189,15 +196,28 @@ const CrimeHeatMap = () => {
           <div
             className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
             style={{
-              left: `${currentLocation.x}%`,
-              top: `${currentLocation.y}%`,
+              left: `${Math.max(5, Math.min(95, currentLocation.x))}%`,
+              top: `${Math.max(5, Math.min(95, currentLocation.y))}%`,
             }}
           >
             <div className="relative">
-              <div className="absolute -inset-3 bg-primary/30 rounded-full animate-ping"></div>
-              <div className="relative bg-primary rounded-full p-2 shadow-lg border-2 border-white">
+              <div className={`absolute -inset-3 rounded-full animate-ping ${location ? 'bg-primary/30' : 'bg-muted/30'}`}></div>
+              <div className={`relative rounded-full p-2 shadow-lg border-2 border-white ${location ? 'bg-primary' : 'bg-muted'}`}>
                 <Target className="h-4 w-4 text-white" />
               </div>
+              {/* Location Accuracy Circle */}
+              {location && (
+                <div 
+                  className="absolute border-2 border-primary/30 rounded-full bg-primary/10"
+                  style={{
+                    width: `${Math.min(100, location.accuracy / 10)}px`,
+                    height: `${Math.min(100, location.accuracy / 10)}px`,
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                />
+              )}
             </div>
           </div>
 
@@ -226,10 +246,27 @@ const CrimeHeatMap = () => {
 
           {/* Risk Level Indicator */}
           <div className="absolute top-4 right-4">
-            <Badge variant="secondary" className="bg-safe/10 text-safe border-safe/20">
-              <Shield className="h-3 w-3 mr-1" />
-              Safe Area
-            </Badge>
+            {locationError ? (
+              <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Location Error
+              </Badge>
+            ) : locationLoading ? (
+              <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20">
+                <Target className="h-3 w-3 mr-1 animate-spin" />
+                Finding Location...
+              </Badge>
+            ) : location ? (
+              <Badge variant="secondary" className="bg-safe/10 text-safe border-safe/20">
+                <Shield className="h-3 w-3 mr-1" />
+                Live Location
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="bg-muted/10 text-muted-foreground border-muted/20">
+                <Shield className="h-3 w-3 mr-1" />
+                Simulated Location
+              </Badge>
+            )}
           </div>
         </div>
 
