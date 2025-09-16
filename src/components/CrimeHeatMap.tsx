@@ -86,12 +86,22 @@ const CrimeHeatMap = () => {
     { id: 4, x: 20, y: 50, name: 'Metro Police', type: 'police' },
   ];
 
-  const currentLocation = location 
-    ? { 
-        x: 45 + (location.longitude - (-74.006)) * 1000, // Approximate conversion for demo
-        y: 45 + (40.7128 - location.latitude) * 1000 
-      }
-    : { x: 45, y: 45 }; // Fallback position
+const normalize = (value: number, min: number, max: number) => 
+  ((value - min) / (max - min)) * 100;
+
+// Example bounding box (adjust to your region)
+const LAT_MIN = 40.0;
+const LAT_MAX = 41.0;
+const LNG_MIN = -75.0;
+const LNG_MAX = -73.0;
+
+const currentLocation = location
+  ? {
+      x: normalize(location.longitude, LNG_MIN, LNG_MAX),
+      y: 100 - normalize(location.latitude, LAT_MIN, LAT_MAX), // invert y-axis
+    }
+  : { x: 50, y: 50 };
+
 
   const getHeatColor = (intensity: string) => {
     switch (intensity) {
