@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { 
   MapPin, 
   Navigation, 
@@ -11,10 +12,13 @@ import {
   EyeOff,
   Layers,
   Target,
-  Maximize2
+  Maximize2,
+  Key
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface CrimeZone {
   id: number;
@@ -45,14 +49,46 @@ const CrimeHeatMap = () => {
   } = useGeolocation();
   const [showHeatMap, setShowHeatMap] = useState(true);
   const [showSafeZones, setShowSafeZones] = useState(true);
+  const [mapboxToken, setMapboxToken] = useState('');
+  const [isMapReady, setIsMapReady] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+
+  // Initialize map when token is provided
+  useEffect(() => {
+    if (!mapboxToken || !mapContainer.current || map.current) return;
+
+    mapboxgl.accessToken = mapboxToken;
+    
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [-74.006, 40.7128], // NYC coordinates
+      zoom: 12,
+      pitch: 0,
+    });
+
+    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    map.current.on('load', () => {
+      setIsMapReady(true);
+      updateMapMarkers();
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, [mapboxToken]);
 
   // Start watching position when component mounts
   useEffect(() => {
-    // Get initial position
     getCurrentPosition();
     
-    // Start continuous tracking
     const startWatching = async () => {
       const watchId = watchPosition();
       if (watchId) {
@@ -62,7 +98,6 @@ const CrimeHeatMap = () => {
     
     startWatching();
 
-    // Cleanup on unmount
     return () => {
       if (watchIdRef.current) {
         clearWatch(watchIdRef.current);
@@ -70,37 +105,156 @@ const CrimeHeatMap = () => {
     };
   }, [getCurrentPosition, watchPosition, clearWatch]);
 
-  // Mock crime data - in real app this would come from crime APIs
+  // Update user location on map
+  useEffect(() => {
+    if (!map.current || !location) return;
+
+    map.current.flyTo({
+      center: [location.longitude, location.latitude],
+      zoom: 15,
+      duration: 2000
+    });
+
+    updateMapMarkers();
+  }, [location, isMapReady]);
+
+  // Mock crime data with real coordinates (NYC area)
   const crimeZones: CrimeZone[] = [
-    { id: 1, x: 25, y: 30, intensity: 'high', type: 'Theft', size: 80 },
-    { id: 2, x: 70, y: 20, intensity: 'medium', type: 'Harassment', size: 60 },
-    { id: 3, x: 15, y: 70, intensity: 'high', type: 'Assault', size: 70 },
-    { id: 4, x: 85, y: 60, intensity: 'low', type: 'Vandalism', size: 40 },
-    { id: 5, x: 50, y: 80, intensity: 'medium', type: 'Robbery', size: 55 },
+    { id: 1, x: -74.0059, y: 40.7128, intensity: 'high', type: 'Theft', size: 80 },
+    { id: 2, x: -74.0020, y: 40.7150, intensity: 'medium', type: 'Harassment', size: 60 },
+    { id: 3, x: -74.0080, y: 40.7100, intensity: 'high', type: 'Assault', size: 70 },
+    { id: 4, x: -73.9950, y: 40.7200, intensity: 'low', type: 'Vandalism', size: 40 },
+    { id: 5, x: -74.0100, y: 40.7050, intensity: 'medium', type: 'Robbery', size: 55 },
   ];
 
   const safeZones: SafeZone[] = [
-    { id: 1, x: 40, y: 15, name: 'City Police Station', type: 'police' },
-    { id: 2, x: 80, y: 40, name: 'General Hospital', type: 'hospital' },
-    { id: 3, x: 60, y: 50, name: 'City Hall', type: 'government' },
-    { id: 4, x: 20, y: 50, name: 'Metro Police', type: 'police' },
+    { id: 1, x: -74.0030, y: 40.7180, name: 'City Police Station', type: 'police' },
+    { id: 2, x: -73.9980, y: 40.7160, name: 'General Hospital', type: 'hospital' },
+    { id: 3, x: -74.0040, y: 40.7140, name: 'City Hall', type: 'government' },
+    { id: 4, x: -74.0070, y: 40.7110, name: 'Metro Police', type: 'police' },
   ];
 
-const normalize = (value: number, min: number, max: number) => 
-  ((value - min) / (max - min)) * 100;
+  // Update map markers
+  const updateMapMarkers = () => {
+    if (!map.current || !isMapReady) return;
 
-// Example bounding box (adjust to your region)
-const LAT_MIN = 40.0;
-const LAT_MAX = 41.0;
-const LNG_MIN = -75.0;
-const LNG_MAX = -73.0;
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
 
-const currentLocation = location
-  ? {
-      x: normalize(location.longitude, LNG_MIN, LNG_MAX),
-      y: 100 - normalize(location.latitude, LAT_MIN, LAT_MAX), // invert y-axis
+    // Add crime zone markers
+    if (showHeatMap) {
+      crimeZones.forEach(zone => {
+        const el = document.createElement('div');
+        el.className = 'crime-marker';
+        el.style.width = `${zone.size / 2}px`;
+        el.style.height = `${zone.size / 2}px`;
+        el.style.borderRadius = '50%';
+        el.style.cursor = 'pointer';
+        
+        switch (zone.intensity) {
+          case 'high':
+            el.style.backgroundColor = 'rgba(239, 68, 68, 0.6)';
+            el.style.border = '2px solid rgb(239, 68, 68)';
+            break;
+          case 'medium':
+            el.style.backgroundColor = 'rgba(245, 158, 11, 0.5)';
+            el.style.border = '2px solid rgb(245, 158, 11)';
+            break;
+          case 'low':
+            el.style.backgroundColor = 'rgba(251, 146, 60, 0.4)';
+            el.style.border = '2px solid rgb(251, 146, 60)';
+            break;
+        }
+
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([zone.x, zone.y])
+          .setPopup(new mapboxgl.Popup().setHTML(`
+            <div class="p-2">
+              <h3 class="font-semibold text-sm">${zone.type}</h3>
+              <p class="text-xs text-gray-600">${zone.intensity.charAt(0).toUpperCase() + zone.intensity.slice(1)} Risk</p>
+            </div>
+          `))
+          .addTo(map.current);
+
+        markersRef.current.push(marker);
+      });
     }
-  : { x: 50, y: 50 };
+
+    // Add safe zone markers
+    if (showSafeZones) {
+      safeZones.forEach(zone => {
+        const el = document.createElement('div');
+        el.className = 'safe-marker';
+        el.style.width = '24px';
+        el.style.height = '24px';
+        el.style.backgroundColor = 'rgb(34, 197, 94)';
+        el.style.borderRadius = '50%';
+        el.style.border = '2px solid white';
+        el.style.cursor = 'pointer';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        el.style.color = 'white';
+        el.style.fontSize = '12px';
+        el.style.fontWeight = 'bold';
+
+        switch (zone.type) {
+          case 'police':
+            el.innerHTML = '🛡️';
+            break;
+          case 'hospital':
+            el.innerHTML = '+';
+            break;
+          case 'government':
+            el.innerHTML = '🏛️';
+            break;
+        }
+
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([zone.x, zone.y])
+          .setPopup(new mapboxgl.Popup().setHTML(`
+            <div class="p-2">
+              <h3 class="font-semibold text-sm">${zone.name}</h3>
+              <p class="text-xs text-gray-600">${zone.type.charAt(0).toUpperCase() + zone.type.slice(1)}</p>
+            </div>
+          `))
+          .addTo(map.current);
+
+        markersRef.current.push(marker);
+      });
+    }
+
+    // Add user location marker
+    if (location) {
+      const el = document.createElement('div');
+      el.className = 'user-marker';
+      el.style.width = '20px';
+      el.style.height = '20px';
+      el.style.backgroundColor = 'rgb(59, 130, 246)';
+      el.style.borderRadius = '50%';
+      el.style.border = '3px solid white';
+      el.style.cursor = 'pointer';
+      el.style.boxShadow = '0 0 10px rgba(59, 130, 246, 0.5)';
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([location.longitude, location.latitude])
+        .setPopup(new mapboxgl.Popup().setHTML(`
+          <div class="p-2">
+            <h3 class="font-semibold text-sm">Your Location</h3>
+            <p class="text-xs text-gray-600">Accuracy: ${location.accuracy.toFixed(0)}m</p>
+          </div>
+        `))
+        .addTo(map.current);
+
+      markersRef.current.push(marker);
+    }
+  };
+
+  // Update markers when toggles change
+  useEffect(() => {
+    updateMapMarkers();
+  }, [showHeatMap, showSafeZones, isMapReady]);
 
 
   const getHeatColor = (intensity: string) => {
@@ -167,126 +321,45 @@ const currentLocation = location
         </div>
       </CardHeader>
       <CardContent>
+        {/* Mapbox Token Input */}
+        {!mapboxToken && (
+          <div className="mb-4 p-4 bg-warning/10 border border-warning/20 rounded-lg">
+            <div className="flex items-center space-x-2 mb-2">
+              <Key className="h-4 w-4 text-warning" />
+              <span className="text-sm font-medium">Mapbox Token Required</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Get your free token from{' '}
+              <a href="https://mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                mapbox.com
+              </a>
+            </p>
+            <div className="flex space-x-2">
+              <Input
+                placeholder="Paste your Mapbox public token here..."
+                value={mapboxToken}
+                onChange={(e) => setMapboxToken(e.target.value)}
+                className="flex-1"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Map Container */}
         <div className="relative bg-secondary/20 rounded-lg border-2 border-border overflow-hidden" style={{ height: '400px' }}>
-          {/* Background Grid */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="grid grid-cols-10 grid-rows-10 h-full w-full">
-              {Array.from({ length: 100 }).map((_, i) => (
-                <div key={i} className="border border-muted"></div>
-              ))}
-            </div>
-          </div>
-
-          {/* Street Lines */}
-          <div className="absolute inset-0">
-            <div className="absolute top-1/4 left-0 right-0 h-0.5 bg-muted"></div>
-            <div className="absolute top-1/2 left-0 right-0 h-1 bg-muted"></div>
-            <div className="absolute top-3/4 left-0 right-0 h-0.5 bg-muted"></div>
-            <div className="absolute left-1/4 top-0 bottom-0 w-0.5 bg-muted"></div>
-            <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-muted"></div>
-            <div className="absolute left-3/4 top-0 bottom-0 w-0.5 bg-muted"></div>
-          </div>
-
-          {/* Crime Heat Zones */}
-          {showHeatMap && crimeZones.map((zone) => (
-            <div
-              key={`crime-${zone.id}`}
-              className={`absolute rounded-full ${getHeatColor(zone.intensity)} pointer-events-none transition-opacity duration-300`}
-              style={{
-                left: `${zone.x}%`,
-                top: `${zone.y}%`,
-                width: `${zone.size}px`,
-                height: `${zone.size}px`,
-                transform: 'translate(-50%, -50%)',
-              }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4 text-destructive opacity-80" />
+          {mapboxToken ? (
+            <div ref={mapContainer} className="absolute inset-0" />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <Key className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Enter Mapbox token to view map</p>
               </div>
             </div>
-          ))}
-
-          {/* Safe Zones */}
-          {showSafeZones && safeZones.map((zone) => (
-            <div
-              key={`safe-${zone.id}`}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-110 cursor-pointer group"
-              style={{
-                left: `${zone.x}%`,
-                top: `${zone.y}%`,
-              }}
-            >
-              <div className="relative">
-                <div className="absolute -inset-2 bg-safe/20 rounded-full animate-pulse"></div>
-                <div className="relative bg-white border-2 border-safe rounded-full p-2 shadow-lg">
-                  {getSafeZoneIcon(zone.type)}
-                </div>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <div className="bg-card border border-border rounded-md p-2 shadow-lg whitespace-nowrap">
-                    <p className="text-xs font-medium">{zone.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{zone.type}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Current Location */}
-          <div
-            className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
-            style={{
-              left: `${Math.max(5, Math.min(95, currentLocation.x))}%`,
-              top: `${Math.max(5, Math.min(95, currentLocation.y))}%`,
-            }}
-          >
-            <div className="relative">
-              <div className={`absolute -inset-3 rounded-full animate-ping ${location ? 'bg-primary/30' : 'bg-muted/30'}`}></div>
-              <div className={`relative rounded-full p-2 shadow-lg border-2 border-white ${location ? 'bg-primary' : 'bg-muted'}`}>
-                <Target className="h-4 w-4 text-white" />
-              </div>
-              {/* Location Accuracy Circle */}
-              {location && (
-                <div 
-                  className="absolute border-2 border-primary/30 rounded-full bg-primary/10"
-                  style={{
-                    width: `${Math.min(100, location.accuracy / 10)}px`,
-                    height: `${Math.min(100, location.accuracy / 10)}px`,
-                    left: '50%',
-                    top: '50%',
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-lg">
-            <h4 className="text-xs font-semibold mb-2">Legend</h4>
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-destructive/60 rounded-full"></div>
-                <span className="text-xs">High Risk</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-warning/50 rounded-full"></div>
-                <span className="text-xs">Medium Risk</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-safe/60 rounded-full"></div>
-                <span className="text-xs">Safe Zone</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Target className="w-3 h-3 text-primary" />
-                <span className="text-xs">You are here</span>
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Risk Level Indicator */}
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 right-4 z-10">
             {locationError ? (
               <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20">
                 <AlertTriangle className="h-3 w-3 mr-1" />
