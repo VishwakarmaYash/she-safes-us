@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,9 +35,40 @@ interface SafeZone {
 
 const CrimeHeatMap = () => {
   const { toast } = useToast();
-  const { location, isLoading: locationLoading, error: locationError } = useGeolocation();
+  const { 
+    location, 
+    isLoading: locationLoading, 
+    error: locationError, 
+    getCurrentPosition,
+    watchPosition,
+    clearWatch 
+  } = useGeolocation();
   const [showHeatMap, setShowHeatMap] = useState(true);
   const [showSafeZones, setShowSafeZones] = useState(true);
+  const watchIdRef = useRef<number | null>(null);
+
+  // Start watching position when component mounts
+  useEffect(() => {
+    // Get initial position
+    getCurrentPosition();
+    
+    // Start continuous tracking
+    const startWatching = async () => {
+      const watchId = watchPosition();
+      if (watchId) {
+        watchIdRef.current = watchId;
+      }
+    };
+    
+    startWatching();
+
+    // Cleanup on unmount
+    return () => {
+      if (watchIdRef.current) {
+        clearWatch(watchIdRef.current);
+      }
+    };
+  }, [getCurrentPosition, watchPosition, clearWatch]);
 
   // Mock crime data - in real app this would come from crime APIs
   const crimeZones: CrimeZone[] = [
