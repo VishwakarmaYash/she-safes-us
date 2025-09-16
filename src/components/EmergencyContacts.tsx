@@ -1,233 +1,202 @@
-import { useState } from "react";
+// CrimeHeatMap.tsx
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { 
-  UserPlus, 
-  Phone, 
-  MessageSquare, 
-  Edit, 
-  Trash2,
-  Heart,
-  Users,
-  Shield
+  MapPin, 
+  Navigation, 
+  AlertTriangle, 
+  Shield, 
+  Eye, 
+  EyeOff,
+  Layers,
+  Target,
+  Maximize2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
-interface Contact {
+interface CrimeZone {
   id: number;
-  name: string;
-  phone: string;
-  relationship: string;
-  priority: 'high' | 'medium' | 'low';
+  x: number;
+  y: number;
+  intensity: "high" | "medium" | "low";
+  type: string;
+  size: number;
 }
 
-const EmergencyContacts = () => {
+interface SafeZone {
+  id: number;
+  x: number;
+  y: number;
+  name: string;
+  type: "police" | "hospital" | "government";
+}
+
+const CrimeHeatMap = () => {
   const { toast } = useToast();
-  const [contacts, setContacts] = useState<Contact[]>([
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      phone: "+1 (555) 123-4567",
-      relationship: "Sister",
-      priority: "high"
-    },
-    {
-      id: 2,
-      name: "Mom",
-      phone: "+1 (555) 987-6543",
-      relationship: "Mother",
-      priority: "high"
-    },
-    {
-      id: 3,
-      name: "Alex Chen",
-      phone: "+1 (555) 456-7890",
-      relationship: "Best Friend",
-      priority: "medium"
-    }
-  ]);
+  const { 
+    location, 
+    isLoading: locationLoading, 
+    error: locationError, 
+    getCurrentPosition,
+    watchPosition,
+    clearWatch 
+  } = useGeolocation();
 
-  const [newContact, setNewContact] = useState({
-    name: "",
-    phone: "",
-    relationship: "",
-    priority: "medium" as const
-  });
+  const [showHeatMap, setShowHeatMap] = useState(true);
+  const [showSafeZones, setShowSafeZones] = useState(true);
+  const watchIdRef = useRef<number | null>(null);
 
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  useEffect(() => {
+    getCurrentPosition();
+    const watchId = watchPosition();
+    if (watchId) watchIdRef.current = watchId;
 
-  const handleAddContact = () => {
-    if (newContact.name && newContact.phone) {
-      const contact: Contact = {
-        id: Date.now(),
-        ...newContact
-      };
-      setContacts([...contacts, contact]);
-      setNewContact({ name: "", phone: "", relationship: "", priority: "medium" });
-      setIsAddDialogOpen(false);
-      toast({
-        title: "Contact Added",
-        description: `${newContact.name} has been added to your emergency contacts.`,
-      });
-    }
-  };
+    return () => {
+      if (watchIdRef.current) clearWatch(watchIdRef.current);
+    };
+  }, [getCurrentPosition, watchPosition, clearWatch]);
 
-  const handleCall = (contact: Contact) => {
-    toast({
-      title: `Calling ${contact.name}`,
-      description: "Connecting...",
-    });
-  };
+  // Mock data (normally from API)
+  const crimeZones: CrimeZone[] = [
+    { id: 1, x: 250, y: 300, intensity: "high", type: "Theft", size: 80 },
+    { id: 2, x: 700, y: 200, intensity: "medium", type: "Harassment", size: 60 },
+    { id: 3, x: 150, y: 700, intensity: "high", type: "Assault", size: 70 },
+    { id: 4, x: 850, y: 600, intensity: "low", type: "Vandalism", size: 40 },
+    { id: 5, x: 500, y: 800, intensity: "medium", type: "Robbery", size: 55 },
+  ];
 
-  const handleMessage = (contact: Contact) => {
-    toast({
-      title: `Messaging ${contact.name}`,
-      description: "Opening messaging app...",
-    });
-  };
+  const safeZones: SafeZone[] = [
+    { id: 1, x: 400, y: 150, name: "City Police Station", type: "police" },
+    { id: 2, x: 800, y: 400, name: "General Hospital", type: "hospital" },
+    { id: 3, x: 600, y: 500, name: "City Hall", type: "government" },
+    { id: 4, x: 200, y: 500, name: "Metro Police", type: "police" },
+  ];
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return <Heart className="h-3 w-3" />;
-      case 'medium':
-        return <Users className="h-3 w-3" />;
+  // Convert real coordinates → map coordinates (rough demo)
+  const mapX = location ? (location.longitude + 180) * 5 : 500;
+  const mapY = location ? (90 - location.latitude) * 5 : 500;
+
+  const getHeatColor = (intensity: string) => {
+    switch (intensity) {
+      case "high":
+        return "bg-gradient-radial from-destructive/60 via-destructive/30 to-transparent";
+      case "medium":
+        return "bg-gradient-radial from-warning/50 via-warning/25 to-transparent";
+      case "low":
+        return "bg-gradient-radial from-orange-400/40 via-orange-400/20 to-transparent";
       default:
-        return <Shield className="h-3 w-3" />;
+        return "bg-gradient-radial from-destructive/40 via-destructive/20 to-transparent";
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-destructive';
-      case 'medium':
-        return 'bg-warning';
+  const getSafeZoneIcon = (type: string) => {
+    switch (type) {
+      case "police":
+        return <Shield className="h-4 w-4 text-safe" />;
+      case "hospital":
+        return <div className="h-4 w-4 bg-safe rounded-full flex items-center justify-center text-white text-xs font-bold">+</div>;
+      case "government":
+        return <div className="h-4 w-4 bg-primary rounded-sm"></div>;
       default:
-        return 'bg-muted';
+        return <Shield className="h-4 w-4 text-safe" />;
     }
   };
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2">
-            <Users className="h-5 w-5 text-primary" />
-            <span>Emergency Contacts</span>
+            <Layers className="h-5 w-5 text-primary" />
+            <span>Crime Heat Map</span>
           </CardTitle>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <UserPlus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Emergency Contact</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={newContact.name}
-                    onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
-                    placeholder="Enter contact name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={newContact.phone}
-                    onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="relationship">Relationship</Label>
-                  <Input
-                    id="relationship"
-                    value={newContact.relationship}
-                    onChange={(e) => setNewContact({ ...newContact, relationship: e.target.value })}
-                    placeholder="e.g., Sister, Friend, Colleague"
-                  />
-                </div>
-                <Button onClick={handleAddContact} className="w-full">
-                  Add Contact
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHeatMap(!showHeatMap)}
+            >
+              {showHeatMap ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="ml-1 text-xs">Heat</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSafeZones(!showSafeZones)}
+            >
+              {showSafeZones ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="ml-1 text-xs">Safe</span>
+            </Button>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {contacts.map((contact) => (
+      <CardContent>
+        <div className="relative bg-secondary/20 rounded-lg border-2 border-border overflow-hidden" style={{ height: "400px" }}>
+          {/* Move whole map when location changes */}
           <div
-            key={contact.id}
-            className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+            className="absolute transition-transform duration-500"
+            style={{
+              width: "2000px",
+              height: "2000px",
+              transform: `translate(${-mapX + 200}px, ${-mapY + 200}px)`,
+            }}
           >
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {contact.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-sm">{contact.name}</h3>
-                  <Badge 
-                    variant="secondary" 
-                    className={`text-xs ${getPriorityColor(contact.priority)} text-white`}
-                  >
-                    <div className="flex items-center space-x-1">
-                      {getPriorityIcon(contact.priority)}
-                      <span>{contact.priority}</span>
-                    </div>
-                  </Badge>
+            {/* Background grid */}
+            <div className="absolute inset-0 opacity-10 grid grid-cols-20 grid-rows-20">
+              {Array.from({ length: 400 }).map((_, i) => (
+                <div key={i} className="border border-muted"></div>
+              ))}
+            </div>
+
+            {/* Crime Zones */}
+            {showHeatMap && crimeZones.map((zone) => (
+              <div
+                key={`crime-${zone.id}`}
+                className={`absolute rounded-full ${getHeatColor(zone.intensity)}`}
+                style={{
+                  left: `${zone.x}px`,
+                  top: `${zone.y}px`,
+                  width: `${zone.size}px`,
+                  height: `${zone.size}px`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <AlertTriangle className="h-4 w-4 text-destructive opacity-80" />
                 </div>
-                <p className="text-xs text-muted-foreground">{contact.phone}</p>
-                <p className="text-xs text-muted-foreground">{contact.relationship}</p>
+              </div>
+            ))}
+
+            {/* Safe Zones */}
+            {showSafeZones && safeZones.map((zone) => (
+              <div
+                key={`safe-${zone.id}`}
+                className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${zone.x}px`, top: `${zone.y}px` }}
+              >
+                <div className="relative bg-white border-2 border-safe rounded-full p-2 shadow-lg">
+                  {getSafeZoneIcon(zone.type)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* FIXED location marker (always center) */}
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+            <div className="relative">
+              <div className="absolute -inset-3 rounded-full animate-ping bg-primary/30"></div>
+              <div className="relative rounded-full p-2 shadow-lg border-2 border-white bg-primary">
+                <Target className="h-4 w-4 text-white" />
               </div>
             </div>
-            
-            <div className="flex space-x-1">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleMessage(contact)}
-                className="h-8 w-8 p-0"
-              >
-                <MessageSquare className="h-3 w-3" />
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleCall(contact)}
-                className="h-8 w-8 p-0"
-              >
-                <Phone className="h-3 w-3" />
-              </Button>
-            </div>
           </div>
-        ))}
-        
-        {contacts.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>No emergency contacts added yet</p>
-            <p className="text-xs">Add contacts to notify in case of emergency</p>
-          </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
 };
 
-export default EmergencyContacts;
+export default CrimeHeatMap;
