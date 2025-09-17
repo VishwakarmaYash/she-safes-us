@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { 
   MapPin, 
   Navigation, 
@@ -12,19 +11,10 @@ import {
   EyeOff,
   Layers,
   Target,
-  Maximize2,
-  Key
+  Maximize2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import { Loader } from "@googlemaps/js-api-loader";
-
-// Declare global google maps types
-declare global {
-  interface Window {
-    google: typeof google;
-  }
-}
 
 interface CrimeZone {
   id: number;
@@ -55,85 +45,7 @@ const CrimeHeatMap = () => {
   } = useGeolocation();
   const [showHeatMap, setShowHeatMap] = useState(true);
   const [showSafeZones, setShowSafeZones] = useState(true);
-  const [googleMapsKey, setGoogleMapsKey] = useState(() => 
-    localStorage.getItem('googleMapsApiKey') || ''
-  );
-  const [isMapReady, setIsMapReady] = useState(false);
   const watchIdRef = useRef<number | null>(null);
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-
-  // Save API key to localStorage
-  const handleSaveApiKey = () => {
-    localStorage.setItem('googleMapsApiKey', googleMapsKey);
-    toast({
-      title: "API Key Saved",
-      description: "Google Maps API key has been saved locally.",
-    });
-  };
-
-  // Initialize Google Maps when API key is provided
-  useEffect(() => {
-    if (!googleMapsKey || !mapContainer.current || map.current) return;
-
-    const loader = new Loader({
-      apiKey: googleMapsKey,
-      version: "weekly",
-    });
-
-    loader.load().then(async () => {
-      if (!mapContainer.current) return;
-
-      map.current = new google.maps.Map(mapContainer.current, {
-        center: { lat: 40.7128, lng: -74.006 }, // NYC coordinates
-        zoom: 12,
-        mapTypeId: google.maps.MapTypeId.ROADMAP,
-        styles: [
-          {
-            "featureType": "all",
-            "elementType": "geometry",
-            "stylers": [{"color": "#212121"}]
-          },
-          {
-            "featureType": "all",
-            "elementType": "labels.text.fill",
-            "stylers": [{"color": "#757575"}]
-          },
-          {
-            "featureType": "all",
-            "elementType": "labels.text.stroke",
-            "stylers": [{"color": "#212121"}]
-          },
-          {
-            "featureType": "road",
-            "elementType": "geometry",
-            "stylers": [{"color": "#2c2c2c"}]
-          },
-          {
-            "featureType": "water",
-            "elementType": "geometry",
-            "stylers": [{"color": "#000000"}]
-          }
-        ]
-      });
-
-      setIsMapReady(true);
-      updateMapMarkers();
-
-    }).catch((error) => {
-      console.error('Error loading Google Maps:', error);
-      toast({
-        title: "Maps Loading Error",
-        description: "Failed to load Google Maps. Check your API key.",
-        variant: "destructive"
-      });
-    });
-
-    return () => {
-      // Google Maps cleanup is handled automatically
-    };
-  }, [googleMapsKey]);
 
   // Start watching position when component mounts
   useEffect(() => {
@@ -155,17 +67,7 @@ const CrimeHeatMap = () => {
     };
   }, [getCurrentPosition, watchPosition, clearWatch]);
 
-  // Update user location on map
-  useEffect(() => {
-    if (!map.current || !location) return;
-
-    map.current.panTo({ lat: location.latitude, lng: location.longitude });
-    map.current.setZoom(15);
-
-    updateMapMarkers();
-  }, [location, isMapReady]);
-
-  // Mock crime data with real coordinates (NYC area)
+  // Mock crime data for grid display
   const crimeZones: CrimeZone[] = [
     { id: 1, lat: 40.7128, lng: -74.0059, intensity: 'high', type: 'Theft', size: 80 },
     { id: 2, lat: 40.7150, lng: -74.0020, intensity: 'medium', type: 'Harassment', size: 60 },
@@ -180,138 +82,6 @@ const CrimeHeatMap = () => {
     { id: 3, lat: 40.7140, lng: -74.0040, name: 'City Hall', type: 'government' },
     { id: 4, lat: 40.7110, lng: -74.0070, name: 'Metro Police', type: 'police' },
   ];
-
-  // Update map markers
-  const updateMapMarkers = () => {
-    if (!map.current || !isMapReady || !window.google) return;
-
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.setMap(null));
-    markersRef.current = [];
-
-    // Add crime zone markers
-    if (showHeatMap) {
-      crimeZones.forEach(zone => {
-        const marker = new google.maps.Marker({
-          position: { lat: zone.lat, lng: zone.lng },
-          map: map.current,
-          title: `${zone.type} - ${zone.intensity} risk`,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: zone.size / 8,
-            fillColor: zone.intensity === 'high' ? '#ef4444' : 
-                      zone.intensity === 'medium' ? '#f59e0b' : '#fb923c',
-            fillOpacity: 0.6,
-            strokeColor: zone.intensity === 'high' ? '#dc2626' : 
-                        zone.intensity === 'medium' ? '#d97706' : '#ea580c',
-            strokeWeight: 2,
-          }
-        });
-
-        const infoWindow = new google.maps.InfoWindow({
-          content: `
-            <div style="padding: 8px;">
-              <h3 style="font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">${zone.type}</h3>
-              <p style="font-size: 12px; color: #666; margin: 0;">${zone.intensity.charAt(0).toUpperCase() + zone.intensity.slice(1)} Risk</p>
-            </div>
-          `
-        });
-
-        marker.addListener('click', () => {
-          infoWindow.open(map.current, marker);
-        });
-
-        markersRef.current.push(marker);
-      });
-    }
-
-    // Add safe zone markers
-    if (showSafeZones) {
-      safeZones.forEach(zone => {
-        let iconSymbol = '🛡️';
-        if (zone.type === 'hospital') iconSymbol = '🏥';
-        if (zone.type === 'government') iconSymbol = '🏛️';
-
-        const marker = new google.maps.Marker({
-          position: { lat: zone.lat, lng: zone.lng },
-          map: map.current,
-          title: zone.name,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 12,
-            fillColor: '#22c55e',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-          }
-        });
-
-        const infoWindow = new google.maps.InfoWindow({
-          content: `
-            <div style="padding: 8px;">
-              <h3 style="font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">${iconSymbol} ${zone.name}</h3>
-              <p style="font-size: 12px; color: #666; margin: 0;">${zone.type.charAt(0).toUpperCase() + zone.type.slice(1)}</p>
-            </div>
-          `
-        });
-
-        marker.addListener('click', () => {
-          infoWindow.open(map.current, marker);
-        });
-
-        markersRef.current.push(marker);
-      });
-    }
-
-    // Add user location marker
-    if (location) {
-      const userMarker = new google.maps.Marker({
-        position: { lat: location.latitude, lng: location.longitude },
-        map: map.current,
-        title: 'Your Location',
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: '#3b82f6',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 3,
-        }
-      });
-
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 8px;">
-            <h3 style="font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">📍 Your Location</h3>
-            <p style="font-size: 12px; color: #666; margin: 0;">Accuracy: ${location.accuracy.toFixed(0)}m</p>
-          </div>
-        `
-      });
-
-      userMarker.addListener('click', () => {
-        infoWindow.open(map.current, userMarker);
-      });
-
-      // Add accuracy circle
-      const accuracyCircle = new google.maps.Circle({
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0.3,
-        strokeWeight: 1,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.1,
-        map: map.current,
-        center: { lat: location.latitude, lng: location.longitude },
-        radius: location.accuracy,
-      });
-
-      markersRef.current.push(userMarker);
-    }
-  };
-
-  // Update markers when toggles change
-  useEffect(() => {
-    updateMapMarkers();
-  }, [showHeatMap, showSafeZones, isMapReady]);
 
 
   const getHeatColor = (intensity: string) => {
@@ -378,45 +148,64 @@ const CrimeHeatMap = () => {
         </div>
       </CardHeader>
       <CardContent>
-        {/* Google Maps API Key Input */}
-        {!googleMapsKey && (
-          <div className="mb-4 p-4 bg-warning/10 border border-warning/20 rounded-lg">
-            <div className="flex items-center space-x-2 mb-2">
-              <Key className="h-4 w-4 text-warning" />
-              <span className="text-sm font-medium">Google Maps API Key Required</span>
+        {/* Simulated Map Container */}
+        <div className="relative bg-secondary/20 rounded-lg border-2 border-border overflow-hidden" style={{ height: '400px' }}>
+          <div className="absolute inset-0 bg-gradient-to-br from-background to-secondary/30">
+            {/* Grid Lines */}
+            <div className="absolute inset-0 opacity-20">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={`v-${i}`} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${(i + 1) * 12.5}%` }} />
+              ))}
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={`h-${i}`} className="absolute left-0 right-0 h-px bg-border" style={{ top: `${(i + 1) * 16.67}%` }} />
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              Get your API key from{' '}
-              <a href="https://console.cloud.google.com/google/maps-apis/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                Google Cloud Console
-              </a>
-            </p>
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Paste your Google Maps API key here..."
-                value={googleMapsKey}
-                onChange={(e) => setGoogleMapsKey(e.target.value)}
-                className="flex-1"
+
+            {/* Crime Zone Overlays */}
+            {showHeatMap && crimeZones.map((zone) => (
+              <div
+                key={zone.id}
+                className={`absolute rounded-full ${getHeatColor(zone.intensity)} animate-pulse`}
+                style={{
+                  width: `${zone.size}px`,
+                  height: `${zone.size}px`,
+                  left: `${20 + (zone.id * 15)}%`,
+                  top: `${15 + (zone.id * 12)}%`,
+                  transform: 'translate(-50%, -50%)'
+                }}
+                title={`${zone.type} - ${zone.intensity} risk`}
               />
-              <Button onClick={handleSaveApiKey} size="sm">
-                Save
-              </Button>
+            ))}
+
+            {/* Safe Zone Markers */}
+            {showSafeZones && safeZones.map((zone) => (
+              <div
+                key={zone.id}
+                className="absolute flex items-center justify-center w-8 h-8 bg-safe rounded-full border-2 border-white shadow-lg"
+                style={{
+                  left: `${25 + (zone.id * 18)}%`,
+                  top: `${60 + (zone.id * 8)}%`,
+                  transform: 'translate(-50%, -50%)'
+                }}
+                title={zone.name}
+              >
+                {getSafeZoneIcon(zone.type)}
+              </div>
+            ))}
+
+            {/* User Location */}
+            <div
+              className="absolute flex items-center justify-center w-4 h-4 bg-primary rounded-full border-2 border-white shadow-lg animate-pulse"
+              style={{
+                left: location ? '50%' : '45%',
+                top: location ? '50%' : '45%',
+                transform: 'translate(-50%, -50%)'
+              }}
+              title="Your Location"
+            >
+              <div className="w-2 h-2 bg-white rounded-full"></div>
             </div>
           </div>
-        )}
-
-        {/* Map Container */}
-        <div className="relative bg-secondary/20 rounded-lg border-2 border-border overflow-hidden" style={{ height: '400px' }}>
-          {googleMapsKey ? (
-            <div ref={mapContainer} className="absolute inset-0" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <Key className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Enter Google Maps API key to view map</p>
-              </div>
-            </div>
-          )}
 
           {/* Risk Level Indicator */}
           <div className="absolute top-4 right-4 z-10">
