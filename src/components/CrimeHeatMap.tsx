@@ -73,7 +73,6 @@ const CrimeHeatMap = () => {
     { id: 2, lat: 40.7150, lng: -74.0020, intensity: 'medium', type: 'Harassment', size: 60 },
     { id: 3, lat: 40.7100, lng: -74.0080, intensity: 'high', type: 'Assault', size: 70 },
     { id: 4, lat: 40.7200, lng: -73.9950, intensity: 'low', type: 'Vandalism', size: 40 },
-    { id: 5, lat: 40.7050, lng: -74.0100, intensity: 'medium', type: 'Robbery', size: 55 },
   ];
 
   const safeZones: SafeZone[] = [
@@ -258,7 +257,7 @@ const CrimeHeatMap = () => {
             <div className="text-xs text-muted-foreground">High Risk Areas</div>
           </div>
           <div className="text-center p-2 bg-warning/5 rounded border border-warning/20">
-            <div className="text-lg font-bold text-warning">2</div>
+            <div className="text-lg font-bold text-warning">1</div>
             <div className="text-xs text-muted-foreground">Medium Risk</div>
           </div>
           <div className="text-center p-2 bg-safe/5 rounded border border-safe/20">
