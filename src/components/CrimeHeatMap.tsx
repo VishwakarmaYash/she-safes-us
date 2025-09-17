@@ -18,8 +18,8 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 
 interface CrimeZone {
   id: number;
-  lat: number;
-  lng: number;
+  x: number;
+  y: number;
   intensity: 'high' | 'medium' | 'low';
   type: string;
   size: number;
@@ -27,8 +27,8 @@ interface CrimeZone {
 
 interface SafeZone {
   id: number;
-  lat: number;
-  lng: number;
+  x: number;
+  y: number;
   name: string;
   type: 'police' | 'hospital' | 'government';
 }
@@ -49,8 +49,10 @@ const CrimeHeatMap = () => {
 
   // Start watching position when component mounts
   useEffect(() => {
+    // Get initial position
     getCurrentPosition();
     
+    // Start continuous tracking
     const startWatching = async () => {
       const watchId = watchPosition();
       if (watchId) {
@@ -60,6 +62,7 @@ const CrimeHeatMap = () => {
     
     startWatching();
 
+    // Cleanup on unmount
     return () => {
       if (watchIdRef.current) {
         clearWatch(watchIdRef.current);
@@ -67,20 +70,37 @@ const CrimeHeatMap = () => {
     };
   }, [getCurrentPosition, watchPosition, clearWatch]);
 
-  // Mock crime data for grid display
+  // Mock crime data - in real app this would come from crime APIs
   const crimeZones: CrimeZone[] = [
-    { id: 1, lat: 40.7128, lng: -74.0059, intensity: 'high', type: 'Theft', size: 80 },
-    { id: 2, lat: 40.7150, lng: -74.0020, intensity: 'medium', type: 'Harassment', size: 60 },
-    { id: 3, lat: 40.7100, lng: -74.0080, intensity: 'high', type: 'Assault', size: 70 },
-    { id: 4, lat: 40.7200, lng: -73.9950, intensity: 'low', type: 'Vandalism', size: 40 },
+    { id: 1, x: 25, y: 30, intensity: 'high', type: 'Theft', size: 80 },
+    { id: 2, x: 70, y: 20, intensity: 'medium', type: 'Harassment', size: 60 },
+    { id: 3, x: 15, y: 70, intensity: 'high', type: 'Assault', size: 70 },
+    { id: 4, x: 85, y: 60, intensity: 'low', type: 'Vandalism', size: 40 },
+    { id: 5, x: 50, y: 80, intensity: 'medium', type: 'Robbery', size: 55 },
   ];
 
   const safeZones: SafeZone[] = [
-    { id: 1, lat: 40.7180, lng: -74.0030, name: 'City Police Station', type: 'police' },
-    { id: 2, lat: 40.7160, lng: -73.9980, name: 'General Hospital', type: 'hospital' },
-    { id: 3, lat: 40.7140, lng: -74.0040, name: 'City Hall', type: 'government' },
-    { id: 4, lat: 40.7110, lng: -74.0070, name: 'Metro Police', type: 'police' },
+    { id: 1, x: 40, y: 15, name: 'City Police Station', type: 'police' },
+    { id: 2, x: 80, y: 40, name: 'General Hospital', type: 'hospital' },
+    { id: 3, x: 60, y: 50, name: 'City Hall', type: 'government' },
+    { id: 4, x: 20, y: 50, name: 'Metro Police', type: 'police' },
   ];
+
+const normalize = (value: number, min: number, max: number) => 
+  ((value - min) / (max - min)) * 100;
+
+// Example bounding box (adjust to your region)
+const LAT_MIN = 40.0;
+const LAT_MAX = 41.0;
+const LNG_MIN = -75.0;
+const LNG_MAX = -73.0;
+
+const currentLocation = location
+  ? {
+      x: normalize(location.longitude, LNG_MIN, LNG_MAX),
+      y: 100 - normalize(location.latitude, LAT_MIN, LAT_MAX), // invert y-axis
+    }
+  : { x: 50, y: 50 };
 
 
   const getHeatColor = (intensity: string) => {
@@ -147,67 +167,126 @@ const CrimeHeatMap = () => {
         </div>
       </CardHeader>
       <CardContent>
-        {/* Simulated Map Container */}
+        {/* Map Container */}
         <div className="relative bg-secondary/20 rounded-lg border-2 border-border overflow-hidden" style={{ height: '400px' }}>
-          <div className="absolute inset-0 bg-gradient-to-br from-background to-secondary/30">
-            {/* Grid Lines */}
-            <div className="absolute inset-0 opacity-20">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={`v-${i}`} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${(i + 1) * 12.5}%` }} />
-              ))}
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={`h-${i}`} className="absolute left-0 right-0 h-px bg-border" style={{ top: `${(i + 1) * 16.67}%` }} />
+          {/* Background Grid */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="grid grid-cols-10 grid-rows-10 h-full w-full">
+              {Array.from({ length: 100 }).map((_, i) => (
+                <div key={i} className="border border-muted"></div>
               ))}
             </div>
+          </div>
 
-            {/* Crime Zone Overlays */}
-            {showHeatMap && crimeZones.map((zone) => (
-              <div
-                key={zone.id}
-                className={`absolute rounded-full ${getHeatColor(zone.intensity)} animate-pulse`}
-                style={{
-                  width: `${zone.size}px`,
-                  height: `${zone.size}px`,
-                  left: `${20 + (zone.id * 15)}%`,
-                  top: `${15 + (zone.id * 12)}%`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-                title={`${zone.type} - ${zone.intensity} risk`}
-              />
-            ))}
+          {/* Street Lines */}
+          <div className="absolute inset-0">
+            <div className="absolute top-1/4 left-0 right-0 h-0.5 bg-muted"></div>
+            <div className="absolute top-1/2 left-0 right-0 h-1 bg-muted"></div>
+            <div className="absolute top-3/4 left-0 right-0 h-0.5 bg-muted"></div>
+            <div className="absolute left-1/4 top-0 bottom-0 w-0.5 bg-muted"></div>
+            <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-muted"></div>
+            <div className="absolute left-3/4 top-0 bottom-0 w-0.5 bg-muted"></div>
+          </div>
 
-            {/* Safe Zone Markers */}
-            {showSafeZones && safeZones.map((zone) => (
-              <div
-                key={zone.id}
-                className="absolute flex items-center justify-center w-8 h-8 bg-safe rounded-full border-2 border-white shadow-lg"
-                style={{
-                  left: `${25 + (zone.id * 18)}%`,
-                  top: `${60 + (zone.id * 8)}%`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-                title={zone.name}
-              >
-                {getSafeZoneIcon(zone.type)}
-              </div>
-            ))}
-
-            {/* User Location */}
+          {/* Crime Heat Zones */}
+          {showHeatMap && crimeZones.map((zone) => (
             <div
-              className="absolute flex items-center justify-center w-4 h-4 bg-primary rounded-full border-2 border-white shadow-lg animate-pulse"
+              key={`crime-${zone.id}`}
+              className={`absolute rounded-full ${getHeatColor(zone.intensity)} pointer-events-none transition-opacity duration-300`}
               style={{
-                left: location ? '50%' : '45%',
-                top: location ? '50%' : '45%',
-                transform: 'translate(-50%, -50%)'
+                left: `${zone.x}%`,
+                top: `${zone.y}%`,
+                width: `${zone.size}px`,
+                height: `${zone.size}px`,
+                transform: 'translate(-50%, -50%)',
               }}
-              title="Your Location"
             >
-              <div className="w-2 h-2 bg-white rounded-full"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <AlertTriangle className="h-4 w-4 text-destructive opacity-80" />
+              </div>
+            </div>
+          ))}
+
+          {/* Safe Zones */}
+          {showSafeZones && safeZones.map((zone) => (
+            <div
+              key={`safe-${zone.id}`}
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-110 cursor-pointer group"
+              style={{
+                left: `${zone.x}%`,
+                top: `${zone.y}%`,
+              }}
+            >
+              <div className="relative">
+                <div className="absolute -inset-2 bg-safe/20 rounded-full animate-pulse"></div>
+                <div className="relative bg-white border-2 border-safe rounded-full p-2 shadow-lg">
+                  {getSafeZoneIcon(zone.type)}
+                </div>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="bg-card border border-border rounded-md p-2 shadow-lg whitespace-nowrap">
+                    <p className="text-xs font-medium">{zone.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{zone.type}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Current Location */}
+          <div
+            className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
+            style={{
+              left: `${Math.max(5, Math.min(95, currentLocation.x))}%`,
+              top: `${Math.max(5, Math.min(95, currentLocation.y))}%`,
+            }}
+          >
+            <div className="relative">
+              <div className={`absolute -inset-3 rounded-full animate-ping ${location ? 'bg-primary/30' : 'bg-muted/30'}`}></div>
+              <div className={`relative rounded-full p-2 shadow-lg border-2 border-white ${location ? 'bg-primary' : 'bg-muted'}`}>
+                <Target className="h-4 w-4 text-white" />
+              </div>
+              {/* Location Accuracy Circle */}
+              {location && (
+                <div 
+                  className="absolute border-2 border-primary/30 rounded-full bg-primary/10"
+                  style={{
+                    width: `${Math.min(100, location.accuracy / 10)}px`,
+                    height: `${Math.min(100, location.accuracy / 10)}px`,
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-lg">
+            <h4 className="text-xs font-semibold mb-2">Legend</h4>
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-destructive/60 rounded-full"></div>
+                <span className="text-xs">High Risk</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-warning/50 rounded-full"></div>
+                <span className="text-xs">Medium Risk</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-safe/60 rounded-full"></div>
+                <span className="text-xs">Safe Zone</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Target className="w-3 h-3 text-primary" />
+                <span className="text-xs">You are here</span>
+              </div>
             </div>
           </div>
 
           {/* Risk Level Indicator */}
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4">
             {locationError ? (
               <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20">
                 <AlertTriangle className="h-3 w-3 mr-1" />
@@ -257,7 +336,7 @@ const CrimeHeatMap = () => {
             <div className="text-xs text-muted-foreground">High Risk Areas</div>
           </div>
           <div className="text-center p-2 bg-warning/5 rounded border border-warning/20">
-            <div className="text-lg font-bold text-warning">1</div>
+            <div className="text-lg font-bold text-warning">2</div>
             <div className="text-xs text-muted-foreground">Medium Risk</div>
           </div>
           <div className="text-center p-2 bg-safe/5 rounded border border-safe/20">
