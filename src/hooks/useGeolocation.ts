@@ -28,8 +28,8 @@ export const useGeolocation = (options?: PositionOptions) => {
 
   const defaultOptions: PositionOptions = {
     enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 300000, // 5 minutes
+    timeout: 15000,
+    maximumAge: 600000, // 10 minutes - reduce update frequency
     ...options,
   };
 
@@ -73,10 +73,13 @@ export const useGeolocation = (options?: PositionOptions) => {
           error: null,
         }));
 
-        toast({
-          title: "Location Updated",
-          description: `Accuracy: ±${Math.round(position.coords.accuracy)}m`,
-        });
+        // Only show toast for manual requests or significant improvements
+        if (state.location === null || position.coords.accuracy < (state.location.accuracy * 0.8)) {
+          toast({
+            title: "Location Updated",
+            description: `Accuracy: ±${Math.round(position.coords.accuracy)}m`,
+          });
+        }
       },
       (error) => {
         let errorMessage = 'Unable to retrieve your location.';
@@ -130,6 +133,8 @@ export const useGeolocation = (options?: PositionOptions) => {
           isLoading: false,
           error: null,
         }));
+        
+        // No toast for watch updates to prevent spam
       },
       (error) => {
         let errorMessage = 'Unable to track your location.';
